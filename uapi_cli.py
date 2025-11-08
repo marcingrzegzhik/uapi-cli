@@ -3,6 +3,8 @@ import argparse
 import os
 import sys
 import webbrowser
+import json
+from pathlib import Path
 from uapi import uAPI, APIError
 
 RESET = "\033[0m"
@@ -13,8 +15,36 @@ YELLOW = "\033[93m"
 MAGENTA = "\033[95m"
 GREY = "\033[90m"
 
+CONFIG_DIR = Path.home() / ".uapi"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+
+def save_api_key(api_key: str):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"api_key": api_key}, f)
+    print(f"{GREEN}✓ API key saved to {CONFIG_FILE}{RESET}")
+
+
+def load_api_key() -> str | None:
+    # 1. Prefer environment variable
+    env_key = os.getenv("UAPI_API_KEY")
+    if env_key:
+        return env_key
+
+    # 2. Try to load from config file
+    if CONFIG_FILE.exists():
+        try:
+            data = json.loads(CONFIG_FILE.read_text())
+            return data.get("api_key")
+        except Exception:
+            pass
+
+    return None
+
+
 def get_api_key():
-    api_key = os.getenv("UAPI_API_KEY")
+    api_key = load_api_key()
     if api_key:
         return api_key
 
@@ -22,7 +52,6 @@ def get_api_key():
     print("You can create or retrieve your key here:")
     print(f"{CYAN}https://uapi.nl/api{RESET}\n")
 
-    # Try opening in default browser
     try:
         webbrowser.open("https://uapi.nl/api", new=2)
         print("(Opened https://uapi.nl/api in your browser.)\n")
@@ -33,7 +62,10 @@ def get_api_key():
     if not api_key:
         print(f"{YELLOW}No key entered. Exiting.{RESET}")
         sys.exit(1)
+
+    save_api_key(api_key)
     return api_key
+
 
 def pretty_dict(d, indent=0):
     pad = " " * indent
@@ -52,6 +84,7 @@ def pretty_dict(d, indent=0):
         else:
             print(f"{pad}{CYAN}{key:<25}{RESET}: {GREEN}{value}{RESET}")
 
+
 def extract(url: str):
     api_key = get_api_key()
     try:
@@ -69,6 +102,7 @@ def extract(url: str):
     except Exception as e:
         print(f"[UNEXPECTED ERROR] {e}", file=sys.stderr)
         sys.exit(1)
+
 
 def search(query: str):
     api_key = get_api_key()
@@ -96,6 +130,7 @@ def search(query: str):
         print(f"[UNEXPECTED ERROR] {e}", file=sys.stderr)
         sys.exit(1)
 
+
 def main():
     parser = argparse.ArgumentParser(prog="uapi", description="uAPI SDK Console Utility")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -112,6 +147,7 @@ def main():
         extract(args.url)
     elif args.command == "search":
         search(" ".join(args.query))
+
 
 if __name__ == "__main__":
     main()
